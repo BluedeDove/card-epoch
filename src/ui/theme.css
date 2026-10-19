@@ -1,0 +1,641 @@
+@font-face{font-family:"FusionPixel";src:url(../../assets/fonts/fusion-pixel-12px-proportional-zh_hans.ttf.woff2) format("woff2");font-display:swap;}
+  :root{
+    /* —— 石板：深色压底（世界是亮的，HUD 必须比世界暗一档才不糊） —— */
+    --ink-0:#06050e; --ink-1:#100d1f; --ink-2:#17132e; --ink-3:#221b40; --ink-4:#2d2455;
+    --line-1:#3d3470; --line-2:#6b5cc0;
+    /* —— 黄铜：唯一的高饱和强调 —— */
+    --brass:#ffd86b; --brass-hi:#ffe9a6; --brass-dim:#9a7f3a;
+    /* —— 文本三级 —— */
+    --txt-1:#f2eeff; --txt-2:#b6aedd; --txt-3:#8b83b8;
+    /* —— 语义 —— */
+    --hp:#ff5f7a; --sh:#7fd7ff; --mn:#8b7bff; --mat:#8ce08a; --ok:#6ee7a0; --bad:#ff6b6b;
+    /* —— 元素色别名：真源是 js/cards.js 的 G.ELEMENTS（卡面与格子读的也是那一份）。
+       这里只是给"文案表里的颜色"与样式引用用的名字，值必须与 cards.js 同色；
+       node tools/ui_shot.cjs --gate 会逐条比对两边，漂移就打行号（对齐 audio_check 反查音效名那套路）。 */
+    --el-neutral:#c9d3e0; --el-fire:#ff7a45; --el-ice:#7fd7ff;
+    --el-rock:#c9a06b; --el-nature:#7fd97f; --el-void:#c58cff;
+    /* —— 尺度：4px 网格、5 档字号、一档边框到底 —— */
+    --s1:4px; --s2:8px; --s3:12px; --s4:16px; --s5:24px; --s6:32px;
+    --fs-1:12px; --fs-2:14px; --fs-3:16px; --fs-4:22px; --fs-5:32px;
+    --edge:2px; --radius:0; --pad-edge:max(24px,3.5vmin);
+    --t1:90ms; --t2:140ms; --t3:220ms; --ease:cubic-bezier(.2,.8,.2,1);
+    /* —— 字族：中文走系统无衬线（旧的 DotGothic16+Courier New 在 Windows 上把中文交给 Courier 兜底，就是"字体怪"的根因）；
+       数字与 id 走等宽并开 tabular-nums，读数不会跳字宽 —— */
+    --font-ui:"FusionPixel","Microsoft YaHei UI","Noto Sans CJK SC",system-ui,sans-serif;
+    --font-num:"FusionPixel","Consolas","DejaVu Sans Mono",ui-monospace,monospace;
+    /* —— 复用配方：硬边（无模糊）、石板底、1px 扫描线、硬偏移阴影、文字暗描边 —— */
+    --frame:0 0 0 var(--edge) var(--ink-0), inset 0 0 0 1px rgba(255,255,255,.07), inset 0 1px 0 rgba(255,255,255,.05), inset 0 -1px 0 rgba(0,0,0,.45);
+    --drop:0 4px 0 rgba(0,0,0,.42);
+    --slate:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0) 46%);
+    --scan:repeating-linear-gradient(180deg,rgba(255,255,255,.022) 0 1px,rgba(255,255,255,0) 1px 3px);
+    --etch:1px 1px 0 var(--ink-0), -1px 1px 0 var(--ink-0), 1px -1px 0 var(--ink-0), -1px -1px 0 var(--ink-0);
+    --panel-bg:rgba(16,13,31,.92);
+    --glow-brass:0 0 10px rgba(255,216,107,.35);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{user-select:none;-webkit-user-select:none;}
+  body.gw-fake-cursor{cursor:none;}
+  body.gw-fake-cursor input,body.gw-fake-cursor textarea{cursor:text;}
+  #gwFakeCursor{position:fixed;left:0;top:0;width:14px;height:20px;pointer-events:none;z-index:99999;image-rendering:pixelated;}
+  #gwFakeCursor canvas{width:14px;height:20px;image-rendering:pixelated;}
+  input,textarea{user-select:text;-webkit-user-select:text;}
+  img{ -webkit-user-drag:none; }
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink-0);color:var(--txt-1);
+    font-family:var(--font-ui);font-size:var(--fs-3);line-height:1.45;}
+  /* 画布尺寸交给 three 的 setSize 写样式；这里的 width/height:100% 是 dpr≠1 的护栏（见 AGENTS 视角不变量） */
+  canvas#gl{display:block;position:fixed;inset:0;width:100%;height:100%;}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:5;}
+  .fade{position:absolute;inset:0;background:var(--ink-0);opacity:0;pointer-events:none;transition:opacity .25s var(--ease);}
+  .fade.on{opacity:1;}
+  .menu{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background-color:rgba(6,5,14,.95);
+    background-image:radial-gradient(ellipse at 50% 40%,rgba(45,36,85,.9),rgba(6,5,14,0) 70%),var(--scan);
+    pointer-events:auto;}
+  .menu.hidden{display:none;}
+  .inv{position:fixed;inset:0;z-index:22;display:none;align-items:stretch;justify-content:center;
+    background-color:rgba(6,5,14,.78);pointer-events:auto;}
+  .inv.on{display:flex;}
+  .ui-hide{display:none !important;}
+  .ui-layer{position:fixed;inset:0;}
+  button,input,textarea,select{font:inherit;color:inherit;}
+  ::selection{background:var(--brass);color:var(--ink-0);}
+  ::-webkit-scrollbar{width:12px;height:12px;}
+  ::-webkit-scrollbar-track{background-color:var(--ink-2);}
+  ::-webkit-scrollbar-thumb{background-color:var(--line-1);box-shadow:inset 0 0 0 var(--edge) var(--ink-0);}
+  ::-webkit-scrollbar-thumb:hover{background-color:var(--line-2);}
+
+  /* ============ 通用件：面板 / 面板头 / 按钮 / 输入 ============ */
+  .ui-panel{position:relative;background-color:var(--panel-bg);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);}
+  .ui-panel::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:10px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-head{display:flex;align-items:center;gap:var(--s2);padding:var(--s1) var(--s2);
+    background-color:var(--ink-2);border-bottom:var(--edge) solid var(--line-1);}
+  .ui-head-t{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:2px;color:var(--brass);}
+  .ui-head-tail{margin-left:auto;font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;}
+  .ui-title{font-size:var(--fs-5);letter-spacing:6px;color:var(--brass);line-height:1.2;text-shadow:var(--etch);}
+  .ui-sub{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-2);letter-spacing:2px;}
+  .ui-h2{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:2px;color:var(--brass);
+    display:flex;align-items:center;gap:var(--s2);margin:0 0 var(--s2);}
+  .ui-h2::after{content:"";flex:1;height:1px;background-color:var(--line-1);}
+  .ui-row{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center;}
+  .ui-row-end{margin-top:var(--s4);}
+  .ui-row-center{justify-content:center;}
+  .ui-btn{font-family:var(--font-ui);font-size:var(--fs-2);letter-spacing:1px;color:var(--txt-1);
+    background-color:var(--ink-3);border:0;padding:var(--s2) var(--s3);cursor:pointer;position:relative;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -1px 0 rgba(0,0,0,.45), 0 2px 0 var(--ink-0);
+    transition:transform var(--t1) var(--ease), border-color var(--t1) var(--ease),
+               color var(--t1) var(--ease), background-color var(--t1) var(--ease);}
+  .ui-btn::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:8px solid transparent;border-image:url(../../assets/ui/theme/button.png) 8 / 8px stretch;image-rendering:pixelated;}
+  .ui-btn:hover{background-color:var(--ink-4);color:var(--brass);transform:translateY(-1px);}
+  .ui-btn:hover::after{border-image:url(../../assets/ui/theme/button-hover.png) 8 / 8px stretch;}
+  .ui-btn:active{transform:translateY(1px);box-shadow:inset 0 1px 0 rgba(0,0,0,.4);}
+  .ui-btn:active::after{border-image:url(../../assets/ui/theme/button-pressed.png) 8 / 8px stretch;}
+  .ui-btn:focus-visible{outline:var(--edge) solid var(--ok);outline-offset:2px;}
+  .ui-btn.on{border-color:var(--brass);background-color:var(--ink-4);color:var(--brass);}
+  .ui-btn.pri{background-color:var(--brass);color:var(--ink-0);font-weight:700;}
+  .ui-btn.pri::after{border-image:url(../../assets/ui/theme/button-pri.png) 8 / 8px stretch;}
+  .ui-btn.pri:hover{background-color:var(--brass-hi);color:var(--ink-0);}
+  /* 禁用不用 opacity（连边框带字一起淡到读不出），改成换色 + 去高光 */
+  .ui-btn:disabled{cursor:not-allowed;transform:none;border-color:var(--line-1);color:var(--txt-2);
+    background-color:var(--ink-2);box-shadow:inset 0 0 0 1px var(--ink-0);}
+  .ui-input{font-family:var(--font-num);font-size:var(--fs-2);background-color:var(--ink-2);color:var(--brass);
+    border:var(--edge) solid var(--line-1);padding:var(--s2) var(--s3);width:200px;letter-spacing:1px;}
+  .ui-input::placeholder{color:var(--txt-3);}
+  .ui-input:focus,.ui-search:focus{outline:none;border-color:var(--line-2);box-shadow:inset 0 0 0 1px var(--line-2);}
+  .ui-textarea{flex:1;min-height:72px;font-family:var(--font-num);font-size:var(--fs-1);background-color:var(--ink-2);
+    color:var(--txt-2);border:var(--edge) solid var(--line-1);padding:var(--s2);width:100%;resize:vertical;line-height:1.5;}
+  .ui-note{font-size:var(--fs-2);color:var(--txt-2);line-height:1.5;}
+  .ui-check{font-size:var(--fs-2);display:flex;align-items:center;gap:var(--s2);color:var(--txt-1);}
+  .ui-check input,.ui-toggle input{-webkit-appearance:none;appearance:none;width:16px;height:16px;flex:none;cursor:pointer;
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);position:relative;}
+  .ui-check input:checked,.ui-toggle input:checked{background-color:var(--brass);border-color:var(--brass);}
+  .ui-check input:checked::after,.ui-toggle input:checked::after{content:"";position:absolute;left:3px;top:3px;
+    width:6px;height:6px;background-color:var(--ink-0);}
+  .ui-check input:focus-visible,.ui-toggle input:focus-visible{outline:var(--edge) solid var(--ok);outline-offset:2px;}
+  .ui-kv{display:flex;flex-direction:column;gap:var(--s1);font-size:var(--fs-2);}
+  .ui-kv-row{display:flex;justify-content:space-between;gap:var(--s3);align-items:baseline;
+    border-bottom:1px solid rgba(61,52,112,.55);padding:2px 0;}
+  .ui-kv-row>span{color:var(--txt-3);font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;
+    flex:none;white-space:nowrap;}
+  .ui-kv-row>b,.ui-kv-v{color:var(--txt-1);font-family:var(--font-num);font-variant-numeric:tabular-nums;}
+  .ui-kbd{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-1);background-color:var(--ink-3);
+    border:var(--edge) solid var(--line-1);box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 2px 0 var(--ink-0);
+    padding:1px var(--s2);letter-spacing:1px;white-space:nowrap;}
+
+  /* ============ 顶栏：一行身份 + 一行监控（贴在左上，中央留给画面） ============ */
+  .ui-topbar{position:absolute;left:var(--pad-edge);top:var(--pad-edge);display:grid;gap:var(--s1);
+    max-width:min(56vw,720px);padding:var(--s3) var(--s3);
+    background-color:var(--panel-bg);background-image:var(--slate);border:0;box-shadow:var(--drop);}
+  .ui-topbar::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-top-main{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-2);letter-spacing:2px;flex-wrap:wrap;}
+  .ui-top-title{color:var(--brass);}
+  .ui-top-mode{font-family:var(--font-num);font-size:var(--fs-1);color:var(--brass);
+    border:var(--edge) solid var(--brass-dim);padding:0 var(--s1);letter-spacing:1px;}
+  .ui-top-meta{display:flex;align-items:center;gap:2px var(--s3);flex-wrap:wrap;row-gap:2px;
+    font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;color:var(--txt-3);}
+  .ui-top-item{white-space:nowrap;display:flex;gap:var(--s1);}
+  .ui-top-item b{color:var(--txt-2);font-variant-numeric:tabular-nums;font-weight:400;}
+  .ui-top-sep{display:none;}
+  /* 顶栏第一行新增的两块（T5）：比分与「三矿」归属。
+     方块本命色由元素自带的 --ui-tone 传进来（viewmodel 只给 owner，颜色怎么画归这一层）：
+     0 = el-fire、1 = el-ice、无人/争抢 = txt-3；争抢那条同时把边框画成 2px 虚线，颜色与形状双通道（WCAG 1.4.1）。
+     零圆角、零模糊、边框只准 0 或 2px（ui_shot --gate 的 C/D/E/F 四条量这个）。 */
+  .ui-top-score{display:inline-flex;align-items:baseline;gap:var(--s1);}
+  .ui-top-score .ui-top-label{font-family:var(--font-ui);letter-spacing:2px;color:var(--txt-2);}
+  .ui-top-score-v{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-1);font-variant-numeric:tabular-nums;}
+  .ui-top-score-sep{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-3);}
+  .ui-lodes{display:inline-flex;align-items:center;gap:var(--s1);}
+  .ui-lode-cells{display:inline-flex;align-items:center;gap:var(--s1);}
+  .ui-lode-chip{display:inline-block;box-sizing:border-box;width:12px;height:12px;
+    background-color:var(--ui-tone,var(--txt-3));border:var(--edge) solid transparent;}
+  .ui-lode-chip.contested{background-color:transparent;border-style:dashed;
+    border-color:var(--ui-tone,var(--txt-3));}
+  /* 积分榜（docs/MODES.md §5，M1 新增）：有哪几行、什么顺序全由编排类的 displaySpec.rows 决定，
+     面板一个玩法都不认识；这一层只管"两列数值扫得出来"——标签走 font-ui + txt-2（与比分那行同一档），
+     数值走 font-num + tabular-nums + txt-1，本方/对方靠一根斜杠分列（位置就是通道，不靠颜色分）。
+     chip 那枚与 .ui-top-mode 同一套硬边写法：边框只准 var(--edge)=2px、零圆角、零模糊、颜色只用令牌。 */
+  .ui-top-board{display:inline-flex;align-items:center;gap:var(--s3);flex-wrap:wrap;}
+  .ui-board-rows,.ui-board-chips{display:inline-flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap;}
+  .ui-board-row,.ui-board-chip{display:inline-flex;align-items:baseline;gap:var(--s1);white-space:nowrap;}
+  .ui-board-k{font-family:var(--font-ui);font-size:var(--fs-1);letter-spacing:2px;color:var(--txt-2);}
+  .ui-board-v{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-1);font-variant-numeric:tabular-nums;}
+  .ui-board-v.theirs{color:var(--txt-2);}
+  .ui-board-sep{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-3);}
+  .ui-board-chip{border:var(--edge) solid var(--line-1);padding:0 var(--s1);}
+  .ui-board-chip .ui-board-k,.ui-board-chip .ui-board-v{font-size:var(--fs-1);letter-spacing:1px;}
+  .ui-board-chip .ui-board-v{color:var(--brass);}
+  .ui-gm{color:var(--brass);font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;
+    border:var(--edge) solid var(--brass-dim);padding:0 var(--s1);}
+  .ui-err{color:var(--bad);font-family:var(--font-num);font-size:var(--fs-1);}
+
+  /* ============ 血条面板：标签在左、条在中、数字在右（数字要扫得出来） ============ */
+  .ui-vitals{position:absolute;left:var(--pad-edge);bottom:var(--pad-edge);width:320px;padding:var(--s3);
+    background-color:var(--panel-bg);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);}
+  .ui-vitals::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-vitals.p2{left:auto;right:var(--pad-edge);}
+  .ui-who{display:flex;align-items:baseline;gap:var(--s2);margin-bottom:var(--s2);
+    font-size:var(--fs-2);letter-spacing:2px;color:var(--brass);}
+  .ui-lives{margin-left:auto;color:var(--hp);letter-spacing:3px;font-size:var(--fs-2);}
+  .ui-meter{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:var(--s2);height:24px;}
+  .ui-meter-k{font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;}
+  .ui-meter-t{position:relative;height:12px;background-color:var(--ink-2);
+    box-shadow:inset 0 0 0 1px var(--ink-0), inset 0 2px 0 rgba(0,0,0,.35);}
+  .ui-meter-t>i{position:absolute;left:0;top:0;bottom:0;width:0;display:block;background-color:var(--txt-2);
+    transition:width var(--t1) steps(6,end);}
+  /* 掉血残影：先按旧值停一拍，再线性追上来（血条"掉得下去"才像游戏） */
+  .ui-meter-t>i.ui-meter-ghost{background-color:var(--txt-3);transition:width var(--t3) linear var(--t2);}
+  .ui-meter-t>i::after{content:"";position:absolute;inset:0;
+    background-image:repeating-linear-gradient(90deg,rgba(6,5,14,0) 0 7px,var(--ink-1) 7px 9px);}
+  .ui-meter.hp .ui-meter-t>i{background-color:var(--hp);}
+  .ui-meter.sh .ui-meter-t>i{background-color:var(--sh);}
+  .ui-meter.mn .ui-meter-t>i{background-color:var(--mn);}
+  .ui-meter-v{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-1);font-variant-numeric:tabular-nums;
+    min-width:64px;text-align:right;}
+  .ui-meter.low .ui-meter-t>i{animation:gw-pulse 900ms var(--ease) infinite;}
+  @keyframes gw-pulse{0%,100%{filter:brightness(1);}50%{filter:brightness(1.5);}}
+  .ui-chipsrow{display:flex;gap:var(--s2);margin-top:var(--s2);flex-wrap:wrap;}
+  .ui-chip{display:flex;gap:var(--s1);align-items:baseline;padding:2px var(--s2);
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);}
+  .ui-chip-k{font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;}
+  .ui-chip-v{font-family:var(--font-num);font-size:var(--fs-2);color:var(--txt-1);font-variant-numeric:tabular-nums;}
+  .ui-statusrow{display:flex;gap:var(--s1);flex-wrap:wrap;margin-top:var(--s2);}
+  .ui-badge{font-family:var(--font-num);font-size:var(--fs-1);padding:2px var(--s1);color:var(--txt-1);
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);
+    box-shadow:inset 3px 0 0 var(--ui-tone,var(--line-2));}
+  .ui-badgebar{display:inline-flex;gap:var(--s1);}
+
+  /* ============ 准星 / 命中那行 / 锁鼠标提示 / 帮助 / 键位带 ============ */
+  .ui-cross{position:absolute;left:50%;top:50%;width:24px;height:24px;margin:-12px 0 0 -12px;}
+  .ui-cross::before{content:"";position:absolute;inset:0;background-image:
+    linear-gradient(var(--brass),var(--brass)),linear-gradient(var(--brass),var(--brass)),
+    linear-gradient(var(--brass),var(--brass)),linear-gradient(var(--brass),var(--brass));
+    background-repeat:no-repeat;background-position:50% 0,50% 100%,0 50%,100% 50%;
+    background-size:2px 8px,2px 8px,8px 2px,8px 2px;}
+  .ui-cross::after{content:"";position:absolute;left:50%;top:50%;width:2px;height:2px;margin:-1px 0 0 -1px;
+    background-color:var(--brass);}
+  .ui-cross.hit{filter:none;}
+  .ui-cross.hit::after{left:4px;top:4px;width:16px;height:16px;margin:0;background-color:transparent;
+    box-shadow:inset 0 0 0 2px var(--brass);}
+  .ui-cross[data-side="1"]{left:75%;display:none;}
+  .hud.split .ui-cross[data-side="0"]{left:25%;}
+  .hud.split .ui-cross[data-side="1"]{display:block;}
+  .ui-aiminfo{position:absolute;left:50%;top:calc(50% + 26px);transform:translateX(-50%);
+    font-family:var(--font-num);font-size:var(--fs-2);letter-spacing:1px;color:var(--txt-1);
+    text-shadow:var(--etch);white-space:nowrap;padding:var(--s1) var(--s2);
+    background-color:rgba(6,5,14,.72);border:var(--edge) solid var(--line-1);}
+  .hud.split .ui-aiminfo{display:none;}
+  #hud.no-aim .ui-cross, #hud.no-aim .ui-aiminfo, #hud.no-aim .ui-help{display:none !important;}
+  .ui-lockhint{position:absolute;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;
+    padding:var(--s3) var(--s4);font-size:var(--fs-2);color:var(--txt-1);line-height:1.6;max-width:min(560px,84vw);
+    background-color:var(--panel-bg);background-image:var(--slate);border:0;
+    box-shadow:var(--drop);display:none;}
+  .ui-lockhint.on{display:block;}
+  .ui-lockhint::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:10px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 10px stretch;image-rendering:pixelated;}
+  .ui-lockhint b{display:block;color:var(--brass);font-size:var(--fs-3);letter-spacing:2px;margin-bottom:var(--s1);}
+  .ui-lockhint span{display:block;font-size:var(--fs-2);color:var(--txt-2);letter-spacing:0;}
+  .ui-help{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(880px,92vw);
+    max-height:86vh;overflow:auto;display:none;padding:var(--s4);
+    background-color:var(--panel-bg);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);}
+  .ui-help::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:10px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 10px stretch;image-rendering:pixelated;}
+  .ui-help-row{display:grid;grid-template-columns:76px 1fr;gap:var(--s3);align-items:baseline;
+    padding:var(--s1) 0;border-bottom:1px solid rgba(61,52,112,.5);}
+  .ui-help-row>b{font-family:var(--font-num);font-size:var(--fs-1);color:var(--brass);letter-spacing:1px;}
+  .ui-help-row>span{font-size:var(--fs-2);color:var(--txt-2);line-height:1.55;}
+  /* 键位带贴右下、坐在手持栏上方。三个坑都踩过：
+     ① 居中横排 → 1280 宽下压住左下血条的数值（1440 恰好躲开，肉眼漏检）；
+     ② 与手持栏同一列 → 与手持栏抢位；
+     ③ 分屏时右侧要留给 P2 的血条 → .hud.split 直接收起（P2 键位在 H 帮助里）。 */
+  /* +124px：手持栏顶上多了一条类别条（约 22px），键位带必须整体让开，否则两块常驻层会叠在一起
+     （ui_shot --gate 的"常驻层两两不相交"量得到）。 */
+  .ui-keybar{position:absolute;right:var(--pad-edge);bottom:calc(var(--pad-edge) + 124px);
+    display:flex;flex-wrap:wrap;gap:var(--s2);align-items:center;justify-content:flex-start;
+    max-width:min(50vw,640px);padding:var(--s2) var(--s3);
+    background-color:rgba(6,5,14,.78);border:0;}
+  .ui-keybar::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-keybar b{color:var(--brass);}
+  .ui-keybar .ui-kbd{color:var(--brass);}
+  .ui-keycap{display:inline-flex;align-items:baseline;gap:var(--s1);}
+  .ui-keycap>span:last-child{font-size:var(--fs-1);color:var(--txt-2);}
+  .ui-block{display:flex;flex-direction:column;gap:var(--s1);min-width:0;}
+  .ui-detail-kv{margin-top:var(--s1);}
+  .ui-detail.empty .ui-detail-name{color:var(--txt-3);}
+  .ui-detail-meta:empty,.ui-detail-text:empty,.ui-detail-kv:empty{display:none;}
+  .ui-detail.empty .ui-detail-icon{background-color:var(--ink-1);}
+  .ui-result-stats{display:flex;flex-direction:column;gap:var(--s2);min-width:0;}
+  .hud.split .ui-keybar{display:none;}
+  /* 分屏：半屏只有 ~720 宽，血条(320) 与本半屏的手持栏(≈392) 在底行必然打架 → 血条抬到手持栏上方 */
+  /* 112px 是旧手持栏（一排五格）的高度；手持栏顶上多了类别条之后它高 117px，
+     112 会让血条底部压进手持栏 5px（ui_shot --gate 的 G 项当场量到）。150 留出余量。 */
+  .hud.split .ui-vitals,.hud.split .ui-vitals.p2{bottom:calc(var(--pad-edge) + 150px);}
+  .ui-log{position:absolute;right:var(--pad-edge);top:var(--pad-edge);width:304px;
+    background-color:var(--panel-bg);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);overflow:hidden;}
+  .ui-log::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-log-body{padding:var(--s2) var(--s3);}
+  .ui-log-row{display:flex;gap:var(--s2);align-items:baseline;font-size:var(--fs-2);line-height:1.45;
+    color:var(--txt-2);padding:2px 0;border-bottom:1px solid rgba(61,52,112,.45);}
+  .ui-log-row:last-child{border-bottom:none;color:var(--txt-1);}
+  .ui-log-row:nth-last-child(2){opacity:.86;}
+  .ui-log-row:nth-last-child(n+4){opacity:.62;}
+  .ui-log-msg{flex:1;min-width:0;}
+  .ui-log-times{font-family:var(--font-num);font-size:var(--fs-1);color:var(--brass);}
+  .ui-toast{position:absolute;left:50%;top:19%;transform:translate(-50%,-50%) scale(.96);opacity:0;
+    padding:var(--s2) var(--s4);font-size:var(--fs-4);letter-spacing:2px;color:var(--brass);text-shadow:var(--etch);
+    background-color:var(--panel-bg);background-image:var(--slate);border:var(--edge) solid var(--line-1);
+    box-shadow:var(--frame);transition:opacity var(--t2) var(--ease), transform var(--t2) var(--ease);}
+  .ui-toast.on{opacity:1;transform:translate(-50%,-50%) scale(1);}
+
+  /* ============ 物品格：图章 + 费用牌（元素色只当印章，不给整格描边） ============ */
+  .ui-slot{position:relative;width:60px;height:60px;display:flex;align-items:center;justify-content:center;
+    background-color:var(--ink-2);background-image:var(--scan);border:0;cursor:pointer;image-rendering:pixelated;
+    transition:transform var(--t1) var(--ease), border-color var(--t1) var(--ease),
+               background-color var(--t1) var(--ease), box-shadow var(--t1) var(--ease);}
+  .ui-slot::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/slot.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-slot::after{content:"";position:absolute;left:0;right:0;bottom:0;height:3px;
+    background-color:var(--ui-tone,var(--line-1));z-index:4;}
+  .ui-slot:hover{border-color:var(--line-2);background-color:var(--ink-3);transform:translateY(-1px);}
+  .ui-slot.sel{background-color:var(--ink-4);transform:translateY(-3px);
+    box-shadow:var(--glow-brass);}
+  .ui-slot.sel::before{border-image:url(../../assets/ui/theme/slot-sel.png) 6 / 6px stretch;}
+  .ui-slot.empty{cursor:default;background-color:var(--ink-1);border-color:var(--line-1);transform:none;
+    box-shadow:0 0 0 var(--edge) var(--ink-0), inset 0 0 0 1px rgba(255,255,255,.03);}
+  .ui-slot.empty::after{background-color:var(--ink-2);}
+  .ui-slot.deny{background-color:var(--ink-1);}
+  .ui-slot.deny::before{border-image:url(../../assets/ui/theme/slot-deny.png) 6 / 6px stretch;}
+  .ui-slot.deny::before{content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:repeating-linear-gradient(45deg,rgba(255,107,107,.2) 0 4px,rgba(255,107,107,0) 4px 8px);}
+  .ui-slot.deny .ui-slot-icon{opacity:.62;}
+  .ui-slot.deny .ui-slot-cost{background-color:var(--bad);border-color:var(--ink-0);color:var(--ink-0);}
+  .ui-slot.deny:hover{border-color:var(--bad);}
+  .ui-slot-icon{width:32px;height:32px;image-rendering:pixelated;}
+  .ui-slot-cost{position:absolute;left:0;top:0;min-width:24px;height:24px;padding:0 var(--s1);
+    font-family:var(--font-num);font-weight:700;font-size:var(--fs-1);line-height:20px;text-align:center;
+    background-color:var(--ui-tone,var(--mn));color:var(--ink-0);border:var(--edge) solid var(--ink-0);}
+  .ui-slot-cost:empty,.ui-slot-num:empty,.ui-slot-hint:empty,.ui-slot-name:empty{display:none;}
+  .ui-slot-num{position:absolute;right:var(--s1);bottom:5px;font-family:var(--font-num);font-size:var(--fs-2);
+    color:var(--txt-1);text-shadow:var(--etch);}
+  .ui-slot-hint{position:absolute;right:0;top:0;min-width:24px;height:24px;padding:0 var(--s1);
+    font-family:var(--font-num);font-size:var(--fs-1);line-height:20px;text-align:center;color:var(--brass);
+    background-color:var(--ink-1);border:var(--edge) solid var(--ink-0);}
+  .ui-slot-name{position:absolute;left:0;right:0;bottom:3px;padding:0 var(--s1);font-size:var(--fs-1);line-height:16px;
+    color:var(--txt-1);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:var(--etch);}
+  .ui-slot-cd{position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;pointer-events:none;
+    padding-bottom:22px;font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-1);text-shadow:var(--etch);
+    background-image:linear-gradient(0deg,rgba(6,5,14,.9) 0,rgba(6,5,14,.9) calc(var(--ui-cd,0) * 100%),
+      rgba(6,5,14,0) calc(var(--ui-cd,0) * 100%));}
+  .ui-slot-cd:empty{display:none;}
+  /* 手持栏 = 类别条（全部/打击/建筑）+ 五格。类别条就在它改的那五格上方：
+     切卡与"现在是什么模式"是同一眼落点，不再一个在屏幕左下、一个在正下方。 */
+  .ui-hotbar{position:absolute;left:50%;bottom:var(--pad-edge);transform:translateX(-50%);display:flex;flex-direction:column;
+    align-items:center;gap:var(--s1);
+    padding:var(--s3);pointer-events:auto;background-color:var(--panel-bg);background-image:var(--slate);
+    border:0;box-shadow:var(--drop);}
+  .ui-hotslots{display:flex;gap:var(--s2);}
+  /* 出牌组指示条：只在手持栏里一行（当前组 + ‹ › + 自动开火徽章），8 个组的全表在背包左栏。 */
+  .ui-classbar{display:flex;align-items:center;justify-content:center;gap:var(--s2);width:100%;}
+  .ui-classbar-k{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:2px;color:var(--brass);}
+  .ui-classstep{font-family:var(--font-num);font-size:var(--fs-2);line-height:1;color:var(--brass);
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);padding:0 var(--s1);cursor:pointer;min-width:20px;}
+  .ui-classstep:hover{background-color:var(--ink-4);color:var(--brass-hi);}
+  .ui-classnow{display:inline-flex;align-items:baseline;gap:var(--s1);white-space:nowrap;
+    font-family:var(--font-ui);font-size:var(--fs-2);letter-spacing:1px;color:var(--brass);min-width:64px;justify-content:center;}
+  .ui-classnow b{font-family:var(--font-num);color:var(--txt-1);font-variant-numeric:tabular-nums;}
+  .ui-autochip{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;color:var(--txt-3);
+    border:var(--edge) solid var(--line-1);padding:0 var(--s1);white-space:nowrap;cursor:default;}
+  .ui-autochip.on{color:var(--ink-0);background-color:var(--brass);border-color:var(--brass);}
+  /* （旧的全平铺类别片 .ui-classchip 已随 2026-10-18 晚的 8 组改动下线：
+      HUD 只留上面那条"指示条"，全表在背包左栏，那里用通用的 .ui-chips 按钮。） */
+  .ui-hotbar::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  /* 分屏：两台各占半屏。左边那条规则**不能**写成 .hud.split .ui-hotbar——
+     它的优先级高于 .ui-hotbar.p2，会把 P2 那排一起拽到 25%（叠在 P1 下面看不见，
+     改前改后都存在，2026-10-17 靠 ui_shot 的分屏截图才发现）。 */
+  .hud.split .ui-hotbar:not(.p2){left:25%;}
+  .ui-hotbar .ui-slot{width:68px;height:68px;}
+  .ui-hotbar .ui-slot-icon{width:40px;height:40px;}
+  .ui-hotbar.p2{display:none;left:75%;transform:translateX(-50%);}
+  .hud.split .ui-hotbar.p2{display:flex;left:75%;}
+
+  /* ============ 背包：面板头 + 左页签栏 + 中间图鉴墙 + 右卡页 ============ */
+  .ui-bag{flex:1;display:flex;align-items:center;justify-content:center;padding:var(--s5);pointer-events:none;}
+  /* padding 12px = 四周那道 border-image 的厚度：面板头贴着盒子边缘时，
+     "背包"两个字会被边框纹样压掉上半截（截图里看得见）。留出边框的厚度，标题才完整。 */
+  .ui-bag-box{pointer-events:auto;width:min(1240px,94vw);height:min(768px,90vh);min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:12px;
+    background-color:var(--ink-1);background-image:var(--scan);border:0;
+    box-shadow:0 12px 0 rgba(0,0,0,.32);position:relative;}
+  .ui-bag-box::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:12px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-bag-body{flex:1;min-height:0;display:flex;}
+  .ui-rail{width:256px;flex:none;padding:var(--s3);border-right:var(--edge) solid var(--line-1);overflow:auto;
+    display:flex;flex-direction:column;gap:var(--s3);background-color:rgba(13,11,22,.5);}
+  /* min-height:0 是"中间那栏能在窗口不够高时收缩"的唯一开关：
+     少了它，flex 子项的 min-height:auto 会按内容撑开，卡墙（overflow:auto）永远不滚，
+     整块内容从面板底部溢出去 —— 1280×720 那一档的取卡货架就是被切掉的。 */
+  .ui-main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s3);}
+  .ui-detail{width:272px;flex:none;padding:var(--s3);border-left:var(--edge) solid var(--line-1);overflow:auto;
+    display:flex;flex-direction:column;gap:var(--s2);background-color:rgba(13,11,22,.5);}
+  .ui-rail-h{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:2px;color:var(--brass);}
+  .ui-tabs{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-tab{font-family:var(--font-ui);font-size:var(--fs-2);letter-spacing:1px;text-align:left;color:var(--txt-2);
+    background-color:var(--ink-2);border:var(--edge) solid transparent;border-left:var(--edge) solid var(--line-1);
+    padding:var(--s2) var(--s3);cursor:pointer;
+    transition:background-color var(--t1) var(--ease),color var(--t1) var(--ease),border-color var(--t1) var(--ease);}
+  .ui-tab:hover{background-color:var(--ink-3);color:var(--brass);}
+  .ui-tab:focus-visible{outline:var(--edge) solid var(--ok);outline-offset:2px;}
+  .ui-tab.on{background-color:var(--ink-4);color:var(--brass);border-left-color:var(--brass);}
+  .ui-searchrow{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-search{font-family:var(--font-ui);font-size:var(--fs-2);background-color:var(--ink-2);color:var(--txt-1);
+    border:var(--edge) solid var(--line-1);padding:var(--s2) var(--s3);width:100%;}
+  .ui-search::placeholder{color:var(--txt-3);}
+  .ui-count{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);}
+  .ui-filters{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-chips{display:flex;gap:var(--s1);flex-wrap:wrap;}
+  .ui-btns{display:flex;flex-wrap:wrap;gap:var(--s2);}
+  .ui-toggles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--s2) var(--s3);}
+  .ui-toggle{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-2);color:var(--txt-1);cursor:pointer;}
+  .ui-seg{display:flex;align-items:center;gap:var(--s2);font-size:var(--fs-2);flex-wrap:wrap;}
+  .ui-seg-label{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;min-width:56px;}
+  .ui-seg-btns{display:flex;}
+  .ui-seg-btns .ui-btn{border-right-width:1px;padding:var(--s1) var(--s3);font-size:var(--fs-1);}
+  .ui-hint{margin-top:auto;font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);line-height:1.7;
+    border-top:var(--edge) solid var(--line-1);padding-top:var(--s2);white-space:pre-line;}
+  .ui-handrow{display:flex;gap:var(--s2);justify-content:center;padding-bottom:var(--s3);
+    border-bottom:var(--edge) solid var(--line-1);}
+  .ui-handrow .ui-slot{width:72px;height:60px;}
+  .ui-handrow .ui-slot-name{bottom:3px;}
+  .ui-grid{flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));
+    gap:var(--s3);padding:var(--s1) var(--s1) var(--s2) 0;align-content:start;}
+  .ui-tray{display:flex;gap:var(--s2);justify-content:center;padding-top:var(--s3);
+    border-top:var(--edge) solid var(--line-1);}
+  .ui-piles{display:flex;flex-direction:column;gap:var(--s2);border-top:var(--edge) solid var(--line-1);
+    border-bottom:1px solid rgba(61,52,112,.5);padding-top:var(--s3);padding-bottom:var(--s3);}
+  .ui-pile{display:flex;gap:var(--s2);align-items:center;flex-wrap:wrap;min-height:26px;}
+  .ui-pile-label{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;width:100%;}
+  .ui-pile-num{font-family:var(--font-num);font-size:var(--fs-3);color:var(--brass);font-variant-numeric:tabular-nums;}
+  .ui-pile-row{display:flex;gap:var(--s1);flex-wrap:wrap;}
+  .ui-pile-tile{width:24px;height:28px;background-color:var(--ink-2);background-image:var(--scan);
+    border:var(--edge) solid var(--line-1);box-shadow:inset 0 -3px 0 var(--ui-tone,var(--line-2));}
+  .ui-detail-icon{width:96px;height:96px;align-self:center;image-rendering:pixelated;background-color:var(--ink-2);
+    border:var(--edge) solid var(--line-1);box-shadow:var(--frame);}
+  .ui-detail-name{font-size:var(--fs-4);color:var(--brass);letter-spacing:1px;text-align:center;line-height:1.25;}
+  .ui-detail-meta{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-2);letter-spacing:1px;text-align:center;}
+  .ui-detail-text{font-size:var(--fs-2);line-height:1.55;color:var(--txt-1);padding:var(--s2);
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);}
+  .ui-detail-cd{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);}
+  .ui-detail-btns{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);}
+  .ui-detail-tip{margin-top:auto;font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);line-height:1.6;
+    border-top:var(--edge) solid var(--line-1);padding-top:var(--s2);}
+  .ui-debug{flex:1;overflow:auto;display:flex;flex-direction:column;gap:var(--s3);padding:var(--s1) 0;}
+  /* 图鉴里的卡面格（回归脚本按 .icard 数条目）：图章在上、名字在下、费用牌贴角 */
+  .ui-slot.icard{width:auto;height:116px;flex-direction:column;gap:var(--s1);padding:var(--s3) var(--s2) 24px;}
+  .ui-slot.icard .ui-slot-icon{width:38px;height:38px;}
+  .ui-slot.icard .ui-slot-name{bottom:6px;color:var(--txt-1);}
+
+  /* ============ 光标上那一摞 / 悬停提示 ============ */
+  .ui-cursor-stack{position:fixed;left:0;top:0;width:44px;height:44px;pointer-events:none;
+    background-color:var(--ink-2);border:var(--edge) solid var(--brass);box-shadow:var(--drop);}
+  .ui-cursor-stack canvas{width:40px;height:40px;image-rendering:pixelated;}
+  .ui-cursor-num{position:absolute;right:1px;bottom:0;font-family:var(--font-num);font-size:var(--fs-2);
+    color:var(--txt-1);text-shadow:var(--etch);}
+  .ui-tooltip{position:fixed;left:0;top:0;max-width:320px;padding:var(--s2) var(--s3);white-space:pre-wrap;
+    pointer-events:none;font-size:var(--fs-2);line-height:1.5;color:var(--txt-1);
+    background-color:rgba(6,5,14,.96);border:var(--edge) solid var(--line-1);box-shadow:var(--frame),var(--drop);}
+  .ui-tooltip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background-color:var(--ui-tone,var(--brass));}
+  .ui-tip-t{display:block;font-size:var(--fs-3);color:var(--brass);letter-spacing:1px;}
+  .ui-tip-sub{display:block;font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-2);letter-spacing:1px;margin-top:2px;}
+  .ui-tip-body{display:block;font-size:var(--fs-2);color:var(--txt-1);line-height:1.55;margin-top:var(--s2);
+    border-top:var(--edge) solid var(--line-1);padding-top:var(--s2);}
+
+  /* ============ 面板类：三选一 / 主菜单 / 结算 ============ */
+  .ui-choice{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background-color:rgba(6,5,14,.78);pointer-events:auto;}
+  .ui-choice-box{width:min(720px,92vw);max-height:84vh;overflow:auto;padding:var(--s4);
+    background-color:var(--ink-1);background-image:var(--slate),var(--scan);
+    border:var(--edge) solid var(--line-1);box-shadow:var(--frame),var(--drop);}
+  .ui-choice-title{font-size:var(--fs-4);letter-spacing:3px;color:var(--brass);text-shadow:var(--etch);}
+  .ui-choice-hint{font-size:var(--fs-2);color:var(--txt-2);margin:var(--s1) 0 var(--s3);}
+  .ui-choice-foot{margin-top:var(--s3);display:flex;justify-content:flex-end;}
+  .ui-list{display:flex;flex-direction:column;gap:var(--s2);}
+  .ui-list-item{display:grid;grid-template-columns:auto 1fr auto;gap:var(--s3);align-items:center;
+    padding:var(--s2) var(--s3);background-color:var(--ink-2);background-image:var(--scan);
+    border:var(--edge) solid var(--line-1);cursor:pointer;
+    transition:transform var(--t1) var(--ease),border-color var(--t1) var(--ease),background-color var(--t1) var(--ease);}
+  .ui-list-item:hover,.ui-list-item.pick{border-color:var(--brass);background-color:var(--ink-3);transform:translateX(2px);}
+  .ui-list-item:focus-visible{outline:var(--edge) solid var(--ok);outline-offset:2px;}
+  .ui-list-icon{width:36px;height:36px;image-rendering:pixelated;background-color:var(--ink-1);}
+  .ui-list-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .ui-list-title{font-size:var(--fs-3);color:var(--brass);letter-spacing:1px;}
+  .ui-list-sub{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-3);letter-spacing:1px;}
+  .ui-list-detail{font-size:var(--fs-2);color:var(--txt-2);line-height:1.5;}
+  .ui-list-tail{font-family:var(--font-num);font-size:var(--fs-4);color:var(--brass);font-variant-numeric:tabular-nums;}
+  .ui-menu-box{width:min(1024px,94vw);max-height:92vh;overflow:auto;display:grid;
+    grid-template-columns:minmax(300px,1fr) minmax(380px,1.3fr);gap:var(--s5);padding:var(--s5);
+    background-color:var(--ink-1);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);position:relative;}
+  .ui-menu-box::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:12px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-menu-brand{display:flex;flex-direction:column;gap:var(--s3);justify-content:space-between;}
+  .ui-menu-brand .ui-sub{letter-spacing:1px;line-height:1.7;}
+  .ui-menu-hero{height:112px;flex:none;background-image:url(../../assets/ui/theme/hero.png);background-size:cover;background-position:center;image-rendering:pixelated;position:relative;}
+  .ui-menu-hero::after{content:"";position:absolute;inset:0;pointer-events:none;border:6px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-menu-tips{display:flex;flex-direction:column;gap:var(--s1);font-size:var(--fs-1);color:var(--txt-2);line-height:1.6;}
+  .ui-menu-tips b{color:var(--brass);font-weight:400;}
+  .ui-menu-badge{display:inline-block;padding:2px var(--s2);border:var(--edge) solid var(--brass-dim);color:var(--brass);font-size:var(--fs-1);letter-spacing:2px;}
+  .ui-result-score{display:flex;gap:var(--s4);align-items:flex-end;margin:var(--s2) 0 var(--s1);}
+  .ui-result-score .k{font-size:var(--fs-1);color:var(--txt-3);letter-spacing:2px;}
+  .ui-result-score .v{font-family:var(--font-num);font-size:var(--fs-5);color:var(--brass);line-height:1;}
+  .ui-result-score .col{display:flex;flex-direction:column;gap:2px;}
+  .ui-result-score .win .v{color:var(--ok);}
+  .ui-menu-form{display:flex;flex-direction:column;gap:var(--s4);min-width:0;}
+  .ui-sect{background-color:var(--ink-2);padding:var(--s3);position:relative;border:0;}
+  .ui-sect::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:8px solid transparent;border-image:url(../../assets/ui/theme/panel-inner.png) 6 / 6px stretch;image-rendering:pixelated;}
+  .ui-result-box::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:12px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-result-box{position:relative;width:min(880px,94vw);max-height:92vh;overflow:auto;padding:var(--s5);
+    background-color:var(--ink-1);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);position:relative;
+    display:grid;grid-template-columns:minmax(280px,1fr) minmax(280px,1fr);gap:var(--s4) var(--s5);align-items:center;}
+  .ui-result-side{display:flex;flex-direction:column;gap:var(--s3);}
+  .ui-result-title{font-size:var(--fs-5);letter-spacing:5px;color:var(--brass);text-shadow:var(--etch);line-height:1.2;}
+  .ui-result-title.win{color:var(--ok);}
+  .ui-result-title.lose{color:var(--bad);}
+  .ui-result-acts{display:flex;flex-direction:column;gap:var(--s2);}
+  /* ============ 选关（docs/LEVELS.md §4）：三栏 —— 地图 / 规则 / 模式+种子+卡组+行动 ============
+     与菜单同一套令牌：底色 ink-1、卡片 ink-3、强调 brass；零圆角、零模糊、边框只准 0 或 2px。
+     窄屏两条 media 逐档折列，卡片文字靠 overflow-wrap 兜住，长卡名不许挤爆相邻列。 */
+  .ui-level-box{width:min(1180px,94vw);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:var(--s4);
+    padding:var(--s5);background-color:var(--ink-1);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);position:relative;}
+  .ui-level-box::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:12px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-level-head{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-level-cols{display:grid;grid-template-columns:minmax(240px,1.05fr) minmax(240px,1.05fr) minmax(228px,0.95fr);gap:var(--s4);}
+  .ui-level-col,.ui-level-side{display:flex;flex-direction:column;gap:var(--s2);min-width:0;}
+  .ui-level-card{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s3);text-align:left;cursor:pointer;
+    background-color:var(--ink-2);border:var(--edge) solid var(--line-1);color:var(--txt-1);
+    transition:transform var(--t1) var(--ease),border-color var(--t1) var(--ease);}
+  .ui-level-card:hover{border-color:var(--line-2);}
+  .ui-level-card.on{border-color:var(--brass);background-color:var(--ink-3);}
+  .ui-level-card:focus-visible{outline:var(--edge) solid var(--ok);outline-offset:2px;}
+  .ui-level-card-top{display:flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap;}
+  .ui-level-name{font-size:var(--fs-3);letter-spacing:1px;color:var(--txt-1);}
+  .ui-level-card.on .ui-level-name{color:var(--brass);}
+  .ui-level-tag{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;color:var(--txt-1);
+    padding:0 var(--s1);border:var(--edge) solid var(--line-2);margin-left:auto;}
+  .ui-level-tag.rec{color:var(--ink-0);background-color:var(--brass);border-color:var(--brass);}
+  .ui-level-meta{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;color:var(--txt-2);}
+  .ui-level-note{font-size:var(--fs-2);line-height:1.5;color:var(--txt-2);overflow-wrap:anywhere;}
+  .ui-level-side .ui-row{flex-wrap:wrap;}
+  /* 卡组流派七个按钮两列排：竖排七行会把「开始对局」挤出 1280×720 的首屏（实测 top=772）。
+     网格列宽等分，窄列里标签仍是一行（六个字 + 内边距 ≈ 96px < 110px）。 */
+  .ui-level-decks{display:grid;grid-template-columns:1fr 1fr;gap:var(--s2);}
+  .ui-level-decks .ui-btn{width:100%;min-width:0;justify-content:center;}
+  /* 短屏（笔记本 1280×720 / 1080p@150%）：把选关的留白收一档，主按钮留在首屏。
+     不靠 sticky 贴底（那会压住可点内容，2026-10-18 试过又退回）。 */
+  @media (max-height:760px){
+    .ui-level-box{padding:var(--s4);gap:var(--s3);}
+    .ui-level-cols{gap:var(--s3);}
+    .ui-level-card{padding:var(--s2);}
+    .ui-level-note{font-size:var(--fs-1);line-height:1.45;}
+    .ui-level-head .ui-sub{display:none;}
+  }
+  /* 联机三字段（docs/NET.md §9.5）：选中「联网 PVP」才出现的那一块。
+     与卡片同一档：底 ink-2、边框 2px ink-3（比卡片的 line-1 重一档，读成"这一块要填东西"）、
+     零圆角、零模糊阴影、颜色全走令牌；输入框沿用 .ui-input 的档位，只是让它跟着列宽收，
+     不许把 228px 的窄列撑爆（1280×720@dpr1.5 那一档量的就是这条）。 */
+  .ui-level-net{display:flex;flex-direction:column;gap:var(--s2);padding:var(--s3);
+    background-color:var(--ink-2);border:var(--edge) solid var(--ink-3);}
+  .ui-level-net .ui-row{align-items:center;}
+  .ui-level-net-k{font-family:var(--font-num);font-size:var(--fs-1);letter-spacing:1px;color:var(--txt-2);
+    flex:none;min-width:44px;}
+  .ui-level-net .ui-input{flex:1 1 auto;min-width:0;width:auto;max-width:100%;}
+  .ui-level-net-note{font-size:var(--fs-1);line-height:1.5;color:var(--txt-2);overflow-wrap:anywhere;}
+  /* 「怎么联机」三步（2026-10-18）：压在最上面、左侧一道 brass 竖线，读起来像操作清单而不是又一段说明文字。 */
+  .ui-level-net-help{display:flex;flex-direction:column;gap:var(--s1);padding:var(--s2) 0 var(--s2) var(--s3);
+    border-left:var(--edge) solid var(--brass);}
+  .ui-level-net-help-t{font-family:var(--font-num);font-size:var(--fs-2);letter-spacing:1px;color:var(--brass);}
+  .ui-level-net-help-list{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-level-net-step{font-size:var(--fs-1);line-height:1.5;color:var(--txt-1);overflow-wrap:anywhere;}
+  /* 选牌页的三步提示（与联机三步同一档视觉，但更宽：整行摆在标题下） */
+  .ui-loadout-steps{font-size:var(--fs-2);line-height:1.6;color:var(--txt-1);padding:var(--s2) var(--s3);
+    border-left:var(--edge) solid var(--brass);background-color:var(--ink-2);}
+  /* 开始/返回留在列尾（2026-10-18 试过 sticky 贴底：1440×860 下会压住卡组列表、读起来像两层叠字，已退回）。
+     选中「联网 PVP」时整列比一屏高，面板本身可滚动（.ui-level-box 的 max-height:92vh;overflow:auto）——
+     这是有意的：宁可让玩家滚一下，也不让按钮盖在可点内容上。 */
+  .ui-level-acts{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s2);}
+  /* ============ 战前选牌（docs/ROUTER.md §2；任务书 L1 第 3 条）：左卡池 / 右牌库 + 计数 + 就绪 ============
+     与选关同一档：底色 ink-1、行底 ink-2、强调 brass；零圆角、零模糊阴影、边框只准 0 或 2px（var(--edge)）。
+     两条 media 逐档折列；长卡名靠 overflow-wrap 兜住，窄屏不许把相邻列挤爆（1280×720@dpr1.5 量的就是这条）。
+     卡池与牌库各自内部滚动：76 张全铺会把「就绪」推出视口 —— 计数与两颗按钮必须常驻看得见。 */
+  .ui-loadout-box{width:min(1180px,94vw);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:var(--s4);
+    padding:var(--s5);background-color:var(--ink-1);background-image:var(--slate),var(--scan);
+    border:0;box-shadow:var(--drop);position:relative;}
+  .ui-loadout-box::after{content:"";position:absolute;inset:0;pointer-events:none;z-index:3;
+    border:12px solid transparent;border-image:url(../../assets/ui/theme/panel.png) 12 / 12px stretch;image-rendering:pixelated;}
+  .ui-loadout-head{display:flex;flex-direction:column;gap:var(--s1);}
+  .ui-loadout-status{font-family:var(--font-num);font-size:var(--fs-2);letter-spacing:1px;color:var(--brass);line-height:1.5;
+    padding:var(--s2) var(--s3);background-color:var(--ink-2);border:var(--edge) solid var(--line-1);overflow-wrap:anywhere;}
+  .ui-loadout-cols{display:grid;grid-template-columns:minmax(300px,1.35fr) minmax(268px,1fr);gap:var(--s4);align-items:start;}
+  .ui-loadout-col,.ui-loadout-side{display:flex;flex-direction:column;gap:var(--s2);min-width:0;}
+  .ui-loadout-col .ui-list{max-height:52vh;overflow:auto;padding-right:var(--s1);}
+  /* 整副就是 12 张：这一栏要**一眼数得完**，所以按「12 行放得下」定尺寸。
+     上一版 38vh + 上下各 var(--s1) 的内边距只装得下 11 行半，第 12 行被拦腰切掉，看着像坏了。
+     现在每行 = 14px 字 + 2px 上下边框（内边距归零，横向留 var(--s2)），行间距 var(--s1)：
+     实测量出来一行是 24px 内容 + 4px 边框 + 8px 行距 = 36px，12 行就是 432px，
+     所以给到 52vh（860 档 447px）：1440×860 那一档 12 行全部露出来，
+     1280×720 那一档露 10 行、剩两行滚 —— 计数行始终写明「总 N / 12」，不会数不清。
+     窄屏那一档仍然滚动，但滚动条有 padding-right 让位，不压住行尾的 ×。 */
+  .ui-loadout-picks{display:flex;flex-direction:column;gap:var(--s1);max-height:52vh;overflow:auto;padding-right:var(--s1);}
+  .ui-loadout-pick{display:grid;grid-template-columns:auto 1fr auto auto;gap:var(--s2);align-items:center;
+    padding:0 var(--s2);min-height:var(--s4);background-color:var(--ink-2);border:var(--edge) solid var(--line-1);}
+  .ui-loadout-pick-k{font-family:var(--font-num);font-size:var(--fs-2);color:var(--brass);font-variant-numeric:tabular-nums;}
+  .ui-loadout-pick-name{font-size:var(--fs-2);color:var(--txt-1);overflow-wrap:anywhere;}
+  .ui-loadout-pick-kind{font-family:var(--font-num);font-size:var(--fs-1);color:var(--txt-2);white-space:nowrap;}
+  .ui-loadout-empty{font-size:var(--fs-2);color:var(--txt-2);line-height:1.5;}
+  .ui-loadout-count{font-family:var(--font-num);font-size:var(--fs-3);color:var(--txt-1);letter-spacing:1px;
+    font-variant-numeric:tabular-nums;}
+  .ui-loadout-missing{font-size:var(--fs-2);color:var(--txt-2);line-height:1.5;}
+  .ui-loadout-acts{display:flex;flex-direction:column;gap:var(--s2);margin-top:var(--s2);}
+  .ui-loadout-hint{font-size:var(--fs-1);line-height:1.5;color:var(--txt-2);overflow-wrap:anywhere;}
+  @media (max-width:1120px){
+    .ui-loadout-cols{grid-template-columns:minmax(260px,1fr) minmax(224px,1fr);}
+  }
+  @media (max-width:760px){
+    .ui-loadout-cols{grid-template-columns:1fr;}
+    .ui-loadout-col .ui-list{max-height:38vh;}
+    .ui-loadout-picks{max-height:30vh;}
+  }
+  @media (max-width:1120px){
+    .ui-level-cols{grid-template-columns:minmax(220px,1fr) minmax(220px,1fr);}
+    .ui-level-side{grid-column:1 / -1;}
+  }
+  @media (max-width:760px){
+    .ui-level-cols{grid-template-columns:1fr;}
+  }
+  @media (max-width:900px){
+    .ui-menu-box,.ui-result-box{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .ui-btn,.ui-slot,.ui-tab,.ui-list-item,.ui-toast,.fade,.ui-meter-t>i{transition-duration:1ms !important;}
+    .ui-btn:hover,.ui-slot:hover,.ui-slot.sel,.ui-list-item:hover{transform:none;}
+    .ui-meter-t>i.ui-meter-ghost{transition-delay:0ms;}
+    .ui-meter.low .ui-meter-t>i{animation:none;}
+  }
+  /* 系统高对比模式：保住边界与焦点（不靠我们的多层阴影撑结构） */
+  @media (forced-colors: active){
+    .ui-panel,.ui-slot,.ui-btn,.ui-tab,.ui-list-item{border:var(--edge) solid CanvasText;box-shadow:none;forced-color-adjust:none;}
+    .ui-btn:focus-visible{outline:3px solid Highlight;}
+  }

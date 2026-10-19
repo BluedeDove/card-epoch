@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh"><head><meta charset="utf-8"><title>卡牌纪元 · 音乐小样试听</title>
+<style>body{background:#12100f;color:#e8e2d4;font:15px/1.6 system-ui,"Noto Sans SC",sans-serif;margin:0;padding:26px 32px 60px}h1{font-size:22px;margin:0 0 4px}h2{font-size:17px;margin:32px 0 10px;color:#f0b357}.sub{color:#8c8577;margin-bottom:18px}.track{background:#1b1815;border:1px solid #2c2723;border-radius:10px;padding:13px 16px;margin:10px 0}.track b{display:block}audio{width:100%;height:34px;margin-top:6px}ul{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:8px}button{width:100%;text-align:left;background:#241f1a;color:#e8e2d4;border:1px solid #3a332b;border-radius:8px;padding:9px 12px;cursor:pointer;font:inherit}button:hover{background:#31281f;border-color:#f0b357}button span{float:right;color:#8c8577;font-size:12px}.tip{color:#8c8577;font-size:13px}</style></head><body>
+<h1>卡牌纪元 · 纯代码音乐小样</h1>
+<div class="sub">所有声音由 tools/music_synth.cjs 现场合成，项目里不放任何音频文件。三段 BGM 按整小节环形写入渲染，循环点无缝（尾音绕回开头）。</div>
+<div class="sub"><b>本页的 wav 全是生成物、仓库不入库</b>：先跑 <code>node tools/music_compose.cjs all</code> 生成 audio/demos 与 audio/sfx，再打开本页。</div>
+<h2>背景音乐（无缝循环）</h2>
+<div class="track"><b>① 主菜单 · 像素冒险</b><div class="tip">116 BPM · Am–F–C–G 共 16 小节 · 方波主旋律 + 三角波贝斯 + 16 分脉冲琶音 + 芯片鼓组 + 弦垫</div><audio controls loop src="menu-theme.wav"></audio></div>
+<div class="track"><b>② 战斗 · 法阵</b><div class="tip">140 BPM · D 多利亚 16 小节 · 失真低音 riff + 和弦刺 + 锯齿领奏 + 噪声上升过门</div><audio controls loop src="battle-theme.wav"></audio></div>
+<div class="track"><b>③ 村庄 · 安全区</b><div class="tip">62 BPM · F 大调七和弦 8 小节 · 慢起弦垫 + FM 钢片琴 + 沙锤 + 风声</div><audio controls loop src="calm-theme.wav"></audio></div>
+<h2>特殊音效（点按钮试听，共 22 个）</h2>
+<ul><li><button data-src="../sfx/ui.wav"><b>1. UI 点击</b><span>ui</span></button></li>
+<li><button data-src="../sfx/deny.wav"><b>2. 不可出牌 / 拒绝</b><span>deny</span></button></li>
+<li><button data-src="../sfx/card.wav"><b>3. 抽牌 / 翻牌</b><span>card</span></button></li>
+<li><button data-src="../sfx/cast.wav"><b>4. 施法充能</b><span>cast</span></button></li>
+<li><button data-src="../sfx/shoot.wav"><b>5. 法术发射</b><span>shoot</span></button></li>
+<li><button data-src="../sfx/hit.wav"><b>6. 命中</b><span>hit</span></button></li>
+<li><button data-src="../sfx/boom.wav"><b>7. 爆炸</b><span>boom</span></button></li>
+<li><button data-src="../sfx/terrain.wav"><b>8. 地形改造</b><span>terrain</span></button></li>
+<li><button data-src="../sfx/sigil.wav"><b>9. 法阵展开</b><span>sigil</span></button></li>
+<li><button data-src="../sfx/sigilGo.wav"><b>10. 法阵引爆</b><span>sigilGo</span></button></li>
+<li><button data-src="../sfx/shield.wav"><b>11. 护盾</b><span>shield</span></button></li>
+<li><button data-src="../sfx/heal.wav"><b>12. 治疗</b><span>heal</span></button></li>
+<li><button data-src="../sfx/crystal.wav"><b>13. 拾取水晶</b><span>crystal</span></button></li>
+<li><button data-src="../sfx/levelup.wav"><b>14. 升级 / 稀有卡</b><span>levelup</span></button></li>
+<li><button data-src="../sfx/freeze.wav"><b>15. 冰封</b><span>freeze</span></button></li>
+<li><button data-src="../sfx/thunder.wav"><b>16. 雷击</b><span>thunder</span></button></li>
+<li><button data-src="../sfx/teleport.wav"><b>17. 闪现 / 传送</b><span>teleport</span></button></li>
+<li><button data-src="../sfx/summon.wav"><b>18. 召唤随从</b><span>summon</span></button></li>
+<li><button data-src="../sfx/win.wav"><b>19. 胜利号角</b><span>win</span></button></li>
+<li><button data-src="../sfx/lose.wav"><b>20. 战败</b><span>lose</span></button></li>
+<li><button data-src="../sfx/jump.wav"><b>21. 跳跃</b><span>jump</span></button></li>
+<li><button data-src="../sfx/melee.wav"><b>22. 近战挥击</b><span>melee</span></button></li></ul>
+<div class="tip" style="margin-top:16px">整套连播：<audio controls src="sfx-pack.wav" style="max-width:520px"></audio></div>
+<script>var cur=null;document.querySelectorAll("button[data-src]").forEach(function(btn){btn.onclick=function(){if(cur)cur.pause();cur=new Audio(btn.getAttribute("data-src"));cur.play();};});</script>
+</body></html>

@@ -1,0 +1,15 @@
+node_modules/
+*.log
+.DS_Store
+.tmp-*
+
+# 本机研究缓存与导出产物（不入库）
+research/
+dist/
+
+# 逐位可重建的生成物：node tools/music_compose.cjs all
+audio/demos/*.wav
+audio/sfx/*.wav
+
+__pycache__/
+*.pyc

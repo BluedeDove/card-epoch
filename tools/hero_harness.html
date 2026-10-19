@@ -1,0 +1,10 @@
+<!doctype html>
+<!-- tools/hero_harness.html · 角色层回归的独立壳页（不参与游戏运行，index.html 不加载它）
+     只加载 three + 角色层两个文件：并行会话把整机（hud/main）改挂时，骨架段的断言照样量得出来。
+     整机才需要的判据（越肩误隐藏）在 tools/hero_check.cjs 的第二段里跑真页面。 -->
+<meta charset="utf-8"><title>hero rig harness</title>
+<style>html,body{margin:0;background:#20242b}</style>
+<script src="../vendor/three.min.js"></script>
+<script>window.GW = window.GW || {};</script>
+<script src="../js/hero-sprites.js"></script>
+<script src="../js/hero-rig.js"></script>

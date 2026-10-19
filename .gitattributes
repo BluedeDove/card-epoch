@@ -1,0 +1,12 @@
+# 语言统计与差异显示：第三方库与烘焙生成物不算本项目手写代码
+vendor/ linguist-vendored
+*.min.js linguist-vendored
+src/hero-sprites.js linguist-generated
+src/ui/card-icons.js linguist-generated
+src/MANIFEST.json linguist-generated
+*.png linguist-language=images
+*.jpg linguist-language=images
+*.gif linguist-language=images
+*.webp linguist-language=images
+*.woff2 binary
+*.ttf binary
