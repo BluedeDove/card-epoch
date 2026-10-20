@@ -1,0 +1,39 @@
+{
+ "seed": 490706,
+ "ticks": 600,
+ "capturedAt": "2026-10-16T17:15",
+ "source": "js/ 17:00 版（含另一会话的 camera 伺服改造）",
+ "selfDeterministic": true,
+ "identicalToPristine1643": true,
+ "fingerprint": {
+  "blocks": 368640,
+  "worldHash": "eb933143",
+  "p1": {
+   "x": 10.241,
+   "y": 11.96,
+   "z": 2.683,
+   "hp": 100,
+   "mana": 1,
+   "mats": 7,
+   "hand": "heal,dig,raise,strike,bolt",
+   "discard": 5,
+   "kills": 0
+  },
+  "p2": {
+   "x": 88.5,
+   "y": 14.92,
+   "z": 88.5,
+   "hp": 100,
+   "mana": 10
+  },
+  "entities": {
+   "summons": 0,
+   "projectiles": 0,
+   "sigils": 0
+  },
+  "time": 30,
+  "tick": 600,
+  "seed": 490706,
+  "stepErrors": 0
+ }
+}
