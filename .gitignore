@@ -1,0 +1,9 @@
+node_modules/
+*.log
+.DS_Store
+.tmp-*
+
+# 生成的音频产物（可由 tools/music_compose.cjs 逐位重建，不入仓）
+audio/demos/*.wav
+audio/sfx/*.wav
+dist/

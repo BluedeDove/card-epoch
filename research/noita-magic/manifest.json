@@ -1,0 +1,90 @@
+[
+ {
+  "file": "01-mod-noitazenith-sword-storm.webp",
+  "note": "noitazenith（把泰拉瑞亚「星辰/Zenith」搬进 Noita）：召唤一圈飞剑环绕斩击"
+ },
+ {
+  "file": "02-mod-noitazenith-wand-panel.webp",
+  "note": "同一 mod 的法杖面板：Spells/Cast 1、Mana 2000、Always casts 挂着飞剑"
+ },
+ {
+  "file": "03-mod-play-as-megumin-explosion.png",
+  "note": "Play as Megumin：把主角换成惠惠，招牌「Explosion」把整个洞窟炸成金色火球"
+ },
+ {
+  "file": "04-mod-play-as-megumin-sprites.png",
+  "note": "Play as Megumin：替换后的角色与法杖贴图"
+ },
+ {
+  "file": "05-mod-metamorph-spell-lab.webp",
+  "note": "Metamorph: Creative Menu：几百个法术图标摊在面板里，玩家现场拼杖试招"
+ },
+ {
+  "file": "06-mod-metamorph-item-lab.webp",
+  "note": "Metamorph：物品/魔杖/书籍分类生成面板"
+ },
+ {
+  "file": "07-mod-conjurer-reborn-sandbox.webp",
+  "note": "Conjurer Reborn：沙盒 builder 下的绿色符纹祭坛场景"
+ },
+ {
+  "file": "08-mod-new-biomes-poison.png",
+  "note": "New Biomes + Secrets!：新增的翠绿毒液群系与新怪物"
+ },
+ {
+  "file": "09-mod-armageddon-machine.webp",
+  "note": "Noita & the Quest of the Armageddon Machine：自制巨型战争机器"
+ },
+ {
+  "file": "10-mod-particle-life.jpg",
+  "note": "Particle Life!：给材质粒子做出的「活物」（蚯蚓、水黾等）"
+ },
+ {
+  "file": "11-mod-chemical-curiosities.jpg",
+  "note": "Chemical Curiosities：民间炼金扩展，发光药水与奇异菌群"
+ },
+ {
+  "file": "12-mod-new-enemies-166.webp",
+  "note": "New Enemies And Bosses Mod!：166 个新敌人、20 个新 BOSS 一览"
+ },
+ {
+  "file": "13-custom-spell-black-hole.gif",
+  "note": "玩家自定义法术卡：黑洞卡的动效演示"
+ },
+ {
+  "file": "14-custom-spell-darkflame.gif",
+  "note": "玩家自定义法术卡：黑焰卡"
+ },
+ {
+  "file": "15-custom-spell-bomb-holy.gif",
+  "note": "玩家自定义法术卡：神圣炸弹卡"
+ },
+ {
+  "file": "16-mod-anti-gravity.gif",
+  "note": "反重力效果演示（wiki 模组页动图）"
+ },
+ {
+  "file": "17-mod-biome-gold.gif",
+  "note": "生物群系修改器：整层洞穴变成金矿的演示"
+ },
+ {
+  "file": "18-wand-programming-magic-arrow-timer.jpg",
+  "note": "社区魔杖编程词条：带定时的魔法箭（数值面板）"
+ },
+ {
+  "file": "19-wand-programming-spitter-timer.jpg",
+  "note": "社区魔杖编程词条：带定时的喷射弹"
+ },
+ {
+  "file": "20-wand-programming-tentacle-timer.jpg",
+  "note": "社区魔杖编程词条：带定时的召唤触手"
+ },
+ {
+  "file": "21-official-red-lightning.jpg",
+  "note": "官方商店截图：金色殿堂里的红色雷电爆发（作氛围对照）"
+ },
+ {
+  "file": "22-official-ice-burst.jpg",
+  "note": "官方商店截图：冰洞里炸开的白亮冰晶海（作氛围对照）"
+ }
+]

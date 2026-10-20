@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>卡牌纪元 · 重构验证页（src/）</title>
+<!-- 由 tools/next_page.cjs 生成；真源是 src/MANIFEST.json，别手改 -->
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --ink:#0d0b16; --panel:#181228; --panel2:#221a38; --line:#3a2f5c;
+    --gold:#ffd86b; --txt:#e7e3ff; --dim:#9d95c4; --hp:#ff5f7a; --shield:#7fd7ff; --mana:#8b7bff;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);color:var(--txt);
+    font-family:"DotGothic16","Courier New",ui-monospace,monospace; -webkit-font-smoothing:none;}
+  canvas#gl{display:block;position:fixed;inset:0;}
+  .hud{position:fixed;inset:0;pointer-events:none;z-index:5;}
+  .bar{position:absolute;background:rgba(24,18,40,.82);border:3px solid var(--line);
+       box-shadow:0 0 0 3px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.06);}
+  /* 顶栏 */
+  /* 顶栏：靠 margin auto 居中，宽度取内容宽（不能用 left:50%+translateX，
+     那样 shrink-to-fit 会被限制在半屏内，条目多时白白折成两行）。 */
+  #topbar{top:10px;left:0;right:0;margin:0 auto;width:max-content;max-width:96vw;
+          padding:6px 14px;display:flex;gap:2px 16px;
+          align-items:center;font-size:13px;letter-spacing:1px;flex-wrap:wrap;justify-content:center;row-gap:2px;}
+  #topbar > span{white-space:nowrap;}
+  #topbar b{color:var(--gold);}
+  #topbar .sep{color:var(--line);}
+  /* 生命/魔力面板 */
+  .vitals{left:12px;bottom:12px;width:290px;padding:10px 12px;}
+  .vitals.p2{left:auto;right:12px;}
+  .who{font-size:14px;letter-spacing:2px;color:var(--gold);margin-bottom:6px;display:flex;justify-content:space-between;}
+  .who .lives{color:var(--hp);}
+  .meter{height:14px;border:2px solid #000;background:#0a0813;position:relative;margin-bottom:5px;}
+  .meter>i{position:absolute;inset:0;width:50%;transition:width .12s linear;display:block;}
+  .meter.hp>i{background:linear-gradient(180deg,#ff8fa2,#ff3d63);}
+  .meter.sh>i{background:linear-gradient(180deg,#bfe9ff,#3ea8e0);}
+  .meter.mn>i{background:linear-gradient(180deg,#b3a8ff,#5b48d8);}
+  .meter span{position:absolute;inset:0;font-size:11px;line-height:14px;text-align:center;
+              color:#fff;text-shadow:1px 1px 0 #000;letter-spacing:1px;}
+  .chips{display:flex;gap:8px;font-size:12px;color:var(--dim);margin-top:6px;flex-wrap:wrap;}
+  .chip{border:2px solid var(--line);padding:1px 6px;background:#0f0b1c;}
+  .chip b{color:var(--txt);}
+  /* 手牌 */
+  .hand{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);display:flex;gap:9px;}
+  .hand.p2{bottom:auto;top:64px;transform:translateX(-50%) scale(.8);}
+  .card{width:100px;height:124px;background:linear-gradient(170deg,#241b3c,#140f22);
+        border:3px solid var(--line);box-shadow:0 0 0 3px rgba(0,0,0,.6);position:relative;
+        padding:5px 6px;display:flex;flex-direction:column;align-items:center;gap:3px;}
+  .card.sel{border-color:var(--gold);box-shadow:0 0 0 3px rgba(0,0,0,.6),0 0 16px rgba(255,216,107,.45);
+            transform:translateY(-10px);}
+  .card.deny{filter:grayscale(.6) brightness(.72);}
+  .card .cost{position:absolute;top:-9px;left:-9px;width:26px;height:26px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#b3a8ff,#4b3bb0);border:2px solid #000;color:#fff;
+    font-size:14px;line-height:22px;text-align:center;font-weight:700;}
+  .card .nm{font-size:12px;height:16px;line-height:16px;color:var(--gold);letter-spacing:1px;white-space:nowrap;overflow:hidden;}
+  .card canvas{width:36px;height:36px;image-rendering:pixelated;background:#0a0813;border:2px solid #000;}
+  .card .tp{font-size:10px;color:var(--dim);letter-spacing:1px;}
+  .card .tx{font-size:9.5px;line-height:10px;color:#cdc7e8;height:20px;overflow:hidden;text-align:center;}
+  .card .cd{position:absolute;bottom:3px;right:5px;font-size:10px;color:#89b;}
+  .card .rar{position:absolute;top:-9px;right:-6px;font-size:10px;padding:0 4px;border:2px solid #000;background:#333;color:#fff;}
+  .card.r-uncommon .rar{background:#3b7dd8;} .card.r-rare .rar{background:#c98b1e;}
+  .card .kb{position:absolute;bottom:-9px;left:50%;transform:translateX(-50%);font-size:10px;
+    background:#000;border:2px solid var(--line);padding:0 4px;color:var(--gold);}
+  /* 准星 */
+  #cross{position:absolute;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;}
+  #cross:before,#cross:after{content:"";position:absolute;background:var(--gold);opacity:.9;}
+  #cross:before{left:12px;top:0;width:2px;height:26px;}
+  #cross:after{top:12px;left:0;height:2px;width:26px;}
+  #cross.hit{filter:drop-shadow(0 0 4px #ffd86b);}
+  #aiminfo{position:absolute;left:50%;top:52%;transform:translateX(-50%);margin-top:18px;font-size:12px;
+    color:#e7e3ff;letter-spacing:1px;text-shadow:1px 1px 0 #000;white-space:nowrap;
+    background:rgba(13,11,22,.55);border:1px solid rgba(58,47,92,.8);padding:2px 7px;}
+  #aiminfo.empty{display:none;}
+  /* 日志 */
+  #log{right:12px;top:12px;width:270px;padding:8px 10px;font-size:12px;line-height:17px;}
+  /* 窗口窄于 ~1440 时顶栏会伸到日志面板底下，把日志整体下移一行，别互相压字 */
+  @media (max-width: 1440px){ #log{top:58px;} }
+  #log div{opacity:.92;border-bottom:1px dashed rgba(58,47,92,.6);padding:1px 0;}
+  #log div:last-child{border-bottom:none;}
+  /* 中央提示 */
+  #toast{left:50%;top:34%;transform:translate(-50%,-50%);padding:8px 18px;font-size:16px;
+    letter-spacing:2px;color:var(--gold);opacity:0;transition:opacity .18s;}
+  #toast.on{opacity:1;}
+  /* 帮助 */
+  #help{left:12px;top:12px;width:238px;padding:6px 8px;font-size:10px;line-height:14px;color:#8d86ab;background:rgba(24,18,40,.6);border-width:2px;}
+  #help b{color:var(--txt);}
+  /* 菜单 */
+  .menu{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 40%,rgba(40,26,80,.88),rgba(9,7,16,.96));pointer-events:auto;}
+  .menu.hidden{display:none;}
+  .box{width:min(760px,94vw);max-height:92vh;overflow:auto;padding:22px 26px;background:var(--panel);
+    border:4px solid var(--line);box-shadow:0 0 0 4px #000,0 18px 60px rgba(0,0,0,.7);}
+  h1{font-size:30px;letter-spacing:4px;color:var(--gold);text-shadow:3px 3px 0 #000;margin-bottom:2px;}
+  .sub{font-size:12px;color:var(--dim);letter-spacing:2px;margin-bottom:16px;}
+  h2{font-size:13px;color:var(--txt);letter-spacing:2px;margin:14px 0 7px;border-left:4px solid var(--gold);padding-left:8px;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;}
+  button{font-family:inherit;font-size:13px;letter-spacing:1px;color:var(--txt);background:var(--panel2);
+    border:3px solid var(--line);padding:8px 14px;cursor:pointer;}
+  button:hover{border-color:var(--gold);color:var(--gold);}
+  button.pri{background:linear-gradient(180deg,#5b48d8,#3a2a8c);border-color:var(--gold);color:#fff;font-weight:700;}
+  button.on{border-color:var(--gold);background:#2f2450;color:var(--gold);}
+  input[type=text]{font-family:inherit;font-size:14px;background:#0b0814;border:3px solid var(--line);
+    color:var(--gold);padding:7px 10px;width:190px;letter-spacing:2px;}
+  .note{font-size:11px;color:var(--dim);line-height:16px;margin-top:10px;}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;color:var(--dim);}
+  .kv b{color:var(--txt);}
+  #result .box{text-align:center;}
+  #result .big{font-size:40px;letter-spacing:6px;color:var(--gold);text-shadow:3px 3px 0 #000;margin:8px 0 14px;}
+  .tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  .tag{font-size:10px;border:2px solid var(--line);padding:0 5px;color:var(--dim);}
+  #hud.no-aim #cross, #hud.no-aim #aiminfo, #hud.no-aim #help{display:none !important;}
+  #lockHint{position:absolute;left:50%;bottom:196px;transform:translateX(-50%);padding:4px 12px;text-align:center;
+       background:rgba(13,11,22,.72);border:2px solid #4a3f74;box-shadow:0 0 0 2px rgba(0,0,0,.45);
+       font-size:11px;letter-spacing:.4px;color:#e7e3ff;display:none;line-height:16px;opacity:.92;}
+  #lockHint span{display:block;font-size:10px;color:#8d86ab;}
+  #lockHint b{color:var(--gold);} #lockHint span{font-size:11px;color:var(--dim);letter-spacing:0;}
+  #lockHint.on{display:block;}
+  #keybar{left:50%;bottom:182px;transform:translateX(-50%);padding:2px 9px;font-size:10px;color:#7f7a99;white-space:nowrap;background:rgba(13,11,22,.5);border-color:#2a2342;border-width:2px;}
+  .fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .25s;}
+  .fade.on{opacity:1;}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="fade" id="fade"></div>
+<div class="hud" id="hud">
+  <div class="bar" id="topbar">
+    <span>卡牌纪元 <b>BASELINE</b></span><span class="sep">|</span>
+    <span>seed <b id="ui-seed">—</b></span><span class="sep">|</span>
+    <span id="ui-mode">训练</span><span class="sep">|</span>
+    <span>⏱ <b id="ui-time">0.0</b>s</span><span class="sep">|</span>
+    <span>tick <b id="ui-tick">0</b></span><span class="sep">|</span>
+    <span>FPS <b id="ui-fps">—</b></span><span class="sep">|</span>
+    <span>群系 <b id="ui-biome">—</b></span><span id="ui-err" style="display:none;color:#ff9f9f">⚠ 逻辑异常</span>
+  </div>
+  <div class="bar" id="log"></div>
+  <div class="bar" id="help">
+    <b>P1</b> WASD 移动 · 空格 跳 · 点画面锁鼠标（或 Q/E 转身、F/V 俯仰）· 1–5 / 左键 出牌 · 滚轮 / Tab 切卡<br>
+    <b>视角</b> <b>C</b> 循环：越肩 → 第一人称 → 越肩不画自己；记住上次选择。越肩时身体压到准星会自动不画自己，贴墙会自己换另一侧肩<br>
+    <b>P2</b>（分屏）方向键 移动 · 右Shift 或 Enter 跳 · N M , . / 出牌 · [ ] 微调视角 · 自动锁向对手<br>
+    <b>T</b> 切分屏 · <b>H</b> 帮助 · <b>M</b> 静音 · <b>R</b> 重开 · <b>F9</b> 本地存档<br>
+    <b>规则</b> 移动不耗卡；挖地形、技能、魔法阵、召唤一律靠出牌。1 魔力 ≈ 6 伤害 ≈ 1 格地形。
+  </div>
+  <div class="bar vitals" id="v1">
+    <div class="who"><span id="ui-n1">P1</span><span class="lives" id="ui-l1">♥♥</span></div>
+    <div class="meter hp"><i id="ui-hp1"></i><span id="ui-hpt1">100/100</span></div>
+    <div class="meter sh"><i id="ui-sh1"></i><span id="ui-sht1">护盾 0</span></div>
+    <div class="meter mn"><i id="ui-mn1"></i><span id="ui-mnt1">魔力 3/10</span></div>
+    <div class="chips">
+      <span class="chip">素材 <b id="ui-mat1">5</b></span>
+      <span class="chip">牌库 <b id="ui-dk1">0</b></span>
+      <span class="chip">弃牌 <b id="ui-ds1">0</b></span>
+      <span class="chip">击杀 <b id="ui-k1">0</b></span>
+    </div>
+  </div>
+  <div class="bar vitals p2" id="v2">
+    <div class="who"><span id="ui-n2">P2</span><span class="lives" id="ui-l2">♥♥</span></div>
+    <div class="meter hp"><i id="ui-hp2"></i><span id="ui-hpt2">100/100</span></div>
+    <div class="meter sh"><i id="ui-sh2"></i><span id="ui-sht2">护盾 0</span></div>
+    <div class="meter mn"><i id="ui-mn2"></i><span id="ui-mnt2">魔力 3/10</span></div>
+    <div class="chips">
+      <span class="chip">素材 <b id="ui-mat2">5</b></span>
+      <span class="chip">牌库 <b id="ui-dk2">0</b></span>
+      <span class="chip">弃牌 <b id="ui-ds2">0</b></span>
+      <span class="chip">击杀 <b id="ui-k2">0</b></span>
+    </div>
+  </div>
+  <div class="hand" id="hand1"></div>
+  <div class="hand p2" id="hand2"></div>
+  <div id="cross"></div>
+  <div id="aiminfo"></div>
+  <div class="bar" id="toast"></div>
+  <div id="lockHint"><b>点击画面</b> 锁定鼠标开始操作<br><span>不想锁定也行：Q / E 转身，F / V 俯仰，1–5 出牌，滚轮或 Tab 切卡</span></div>
+  <div class="bar" id="keybar">WASD 移动 · 空格跳（不耗卡）｜鼠标或 Q E 视角 · <b id="ui-cam" style="color:#ffd86b">越肩</b>（C 切换）｜1–5 / 左键 出牌｜滚轮 Tab 切卡｜T 分屏｜H 帮助｜M 静音｜R 重开｜F9 存档</div>
+</div>
+
+<div class="menu" id="menu">
+  <div class="box">
+    <h1>卡牌纪元</h1>
+    <div class="sub">PIXEL 3D CARD DUEL · BASELINE build · 越肩视角 / 开放世界 / 卡牌驱动一切</div>
+    <h2>对战模式</h2>
+    <div class="row" id="modeRow">
+      <button data-mode="train" class="on">单人训练（对手为 AI）</button>
+      <button data-mode="split">同屏分屏双人 PVP</button>
+      <button data-mode="net">联网 PVP（需 server.js，未启用）</button>
+    </div>
+    <h2>世界种子（同一种子 → 同一张地图，逐格一致）</h2>
+    <div class="row"><input type="text" id="seedInput" placeholder="留空随机"><button id="seedRand">随机</button></div>
+    <h2>你的卡组流派</h2>
+    <div class="row" id="deckRow">
+      <button data-deck="starter" class="on">初始 12 张</button>
+      <button data-deck="fire">焰 · 爆发</button>
+      <button data-deck="ice">霜 · 控场</button>
+      <button data-deck="rock">岩 · 地形</button>
+      <button data-deck="nature">林 · 召唤</button>
+      <button data-deck="void">虚 · 位移</button>
+      <button data-deck="random">随机 20 张</button>
+    </div>
+    <h2>存档（种子 + 地形变更，可分享复现）</h2>
+    <div class="row" style="align-items:flex-start">
+      <textarea id="saveBox" style="flex:1;min-height:64px;font-family:inherit;font-size:11px;background:#0b0814;color:#c9d3e0;border:3px solid var(--line);padding:6px" placeholder="局内按 F9 保存、Ctrl+F9 导出到这里；粘贴 JSON 后点导入"></textarea>
+    </div>
+    <div class="row">
+      <button id="btnExport">导出本局存档</button>
+      <button id="btnImport">导入存档</button>
+      <button id="btnLocal">读取本地存档（F9 保存过）</button>
+    </div>
+    <div class="note">操作：<b>移动</b>用键盘（不消耗卡牌）；<b>其余全部操作</b>都要出手牌——挖地、填地、垒墙、放技能、布魔法阵、召唤随从。
+      世界用单一 seed 驱动（地形 / 掉落 / 洗牌都可复现），HUD 上的 seed 可分享给朋友复现同一张图。</div>
+    <div class="row" style="margin-top:14px">
+      <button class="pri" id="btnStart">进入世界</button>
+      <button id="btnHelp">查看规则与验收标准</button>
+    </div>
+    <div class="kv" id="spec"></div>
+  </div>
+</div>
+
+<div class="menu hidden" id="result">
+  <div class="box">
+    <div class="sub">MATCH RESULT</div>
+    <div class="big" id="resTitle">胜利</div>
+    <div class="kv" id="resKv"></div>
+    <div class="row" style="justify-content:center;margin-top:16px">
+      <button class="pri" id="btnAgain">再来一局（同种子）</button>
+      <button id="btnNew">换个种子</button>
+      <button id="btnMenu">返回菜单</button>
+    </div>
+  </div>
+</div>
+<script src="vendor/three.min.js"></script>
+<script src="src/core/namespace.js"></script>
+<script src="src/core/random.js"></script>
+<script src="src/core/noise.js"></script>
+<script src="src/core/vector3.js"></script>
+<script src="src/world/block-table.js"></script>
+<script src="src/world/block-info.js"></script>
+<script src="src/world/voxel-store.js"></script>
+<script src="src/world/height-query.js"></script>
+<script src="src/world/camera-clearance.js"></script>
+<script src="src/world/arena-bounds.js"></script>
+<script src="src/world/raycaster.js"></script>
+<script src="src/world/terrain-builder.js"></script>
+<script src="src/world/prop-planter.js"></script>
+<script src="src/world/spawn-locator.js"></script>
+<script src="src/world/face-table.js"></script>
+<script src="src/world/chunk-mesher.js"></script>
+<script src="src/world/world.js"></script>
+<script src="src/render/atlas/atlas-painters.js"></script>
+<script src="src/render/atlas/pixel-atlas.js"></script>
+<script src="src/cards/elements.js"></script>
+<script src="src/cards/effect-grammar.js"></script>
+<script src="src/cards/sigil-catalog.js"></script>
+<script src="src/cards/deck-presets.js"></script>
+<script src="src/cards/card-catalog.js"></script>
+<script src="src/battle/_placeholder-battle.js"></script>
+<script src="src/rules/_placeholder-rules.js"></script>
+<script src="src/camera/_placeholder-camera.js"></script>
+<script src="src/input/_placeholder-input.js"></script>
+<script src="src/audio/_placeholder-audio.js"></script>
+<script src="src/save/_placeholder-save.js"></script>
+<script src="src/ui/_placeholder-ui.js"></script>
+<script src="src/app/_placeholder-app.js"></script>
+</body>
+</html>

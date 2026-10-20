@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+'use strict';
+global.window = {};
+const path = require('path');
+require(path.join(path.resolve(__dirname, '..'), 'src/app/scenes.js'));
+const G = window.GW;
+let pass = 0, fail = 0;
+function ok(n, c, extra) { if (c) { pass++; console.log('  ✓ ' + n); } else { fail++; console.log('  ✗ ' + n + (extra ? '  ← ' + extra : '')); } }
+ok('初始 boot', G.Scene.is('boot'));
+ok('boot 暂停、pointer free', G.Scene.pausing() === true && G.Scene.pointer() === 'free');
+let seen = null;
+const off = G.Scene.on((n, p) => { seen = n.id + '<' + p.id; });
+G.Scene.enter('menu');
+ok('enter(menu) 生效、暂停', G.Scene.is('menu') && G.Scene.pausing());
+ok('监听器收到 menu<boot', seen === 'menu<boot', seen);
+G.Scene.enter('match', { mode: 'train' });
+ok('match 不暂停、pointer lock', !G.Scene.pausing() && G.Scene.pointer() === 'lock');
+ok('match 面板表里有 hotbar', G.Scene.panels().indexOf('hotbar') >= 0);
+G.Scene.enter('result');
+ok('result 暂停', G.Scene.pausing() && G.Scene.pointer() === 'free');
+G.Scene.progress(0.42);
+ok('progress 夹紧', Math.abs(G.Scene.current().progress - 0.42) < 1e-6);
+G.Scene.enter('nope');
+ok('未知场景回退 boot', G.Scene.is('boot'));
+off();
+const beforeOff = seen;
+G.Scene.enter('menu');
+ok('取消监听后不再回调', seen === beforeOff, seen);
+ok('snapshot 形状', (() => { const s = G.Scene.current(); return s.id === 'menu' && typeof s.pausing === 'boolean' && typeof s.progress === 'number'; })());
+console.log('\n共 ' + (pass + fail) + ' 条，失败 ' + fail);
+process.exit(fail ? 1 : 0);

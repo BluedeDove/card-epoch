@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>卡牌纪元 · 像素 3D 卡牌对战</title>
+<link rel="icon" href="data:,">
+<!-- 界面口径见 docs/UI_DESIGN.md：颜色 / 字号 / 间距 / 边框 / 动效只能来自下面这张令牌表，
+     机检是 tools/ui_shot.cjs --gate（真页面计算样式：离群颜色、圆角、模糊阴影、字号档、安全边距、对比度）。 -->
+<link rel="stylesheet" href="src/ui/theme.css">
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="fade" id="fade"></div>
+<!-- 战斗 HUD 的挂载点：骨架只留挂载点，结构与样式由 js/ui/panels.js 的 spec 生成，
+     玩家可见文案由 js/hud.js 的 H.TEXT 注入（tools/layer_check.cjs 拦骨架里的文案）。 -->
+<div class="hud" id="hud"></div>
+<!-- 背包挂载点（GW.UI 的 panel 层；打开时加 .on，主循环暂停判据问 H.uiPanelOpen()）。 -->
+<div class="inv" id="inv"></div>
+<!-- 菜单挂载点（menu 层）。 -->
+<div class="menu" id="menu"></div>
+<!-- 选关挂载点（level 层，docs/LEVELS.md §4）：骨架只留挂载点，结构由 src/ui/panels.js 的 LevelSelect spec 生成，
+     文案由 src/hud.js 的 H.TEXT.level 注入。 -->
+<div class="menu hidden" id="level"></div>
+<!-- 战前选牌挂载点（loadout 层，docs/ROUTER.md §2）：只在联机模式经过。
+     骨架同样只留挂载点，结构由 src/ui/panels.js 的 Loadout spec 生成，
+     文案由 src/hud.js 的 H.TEXT.loadout 注入。 -->
+<div class="menu hidden" id="loadout"></div>
+<!-- 结算挂载点（result 层）。 -->
+<div class="menu hidden" id="result"></div>
+<!-- 设置挂载点（settings 层）：结构由 panels.js 的 Settings spec 生成，文案由 H.TEXT.settings 注入。 -->
+<div class="menu hidden" id="settings"></div>
+<script src="vendor/three.min.js"></script>
+<script src="src/world.js"></script>
+<!-- 矿脉三件套（L1 world 生成期 + L4 battle 权威层）：顺序必须 gate → planter → lode-system，
+     planter 依赖 gate 的 G.ReachabilityGate，battle.js 的 Match 构造期读 G.LodeSystem。 -->
+<script src="src/reachability-gate.js"></script>
+<script src="src/lode-planter.js"></script>
+<script src="src/lode-system.js"></script>
+<script src="src/core/rng.js"></script>
+<script src="src/systems/match-ops.js"></script>
+<script src="src/systems/stats.js"></script>
+<script src="src/systems/stats-store.js"></script>
+<script src="src/systems/scoreboard.js"></script>
+<script src="src/systems/fluid.js"></script>
+<script src="src/systems/orb.js"></script>
+<script src="src/systems/deck.js"></script>
+<script src="src/systems/aim.js"></script>
+<!-- 自动开火（按住左键连发）：只挑"现在真能打出去"的攻击类牌，走 playCard 那条唯一通道。
+     排在 aim.js 之后、battle.js 之前——它只读 G.Rules 与 G.CARDS_BY_ID，不依赖 Match 的构造顺序。 -->
+<script src="src/systems/auto.js"></script>
+<script src="src/systems/projectile.js"></script>
+<script src="src/systems/summon.js"></script>
+<script src="src/systems/movement.js"></script>
+<script src="src/systems/sigil.js"></script>
+<script src="src/chem.js"></script>
+<script src="src/cards/effect-spec.js"></script>
+<!-- 三选一卡池（纯数据，定案 CARD_ECONOMY §2.1）：只依赖 window.GW，所以排在 cards.js 之前；
+     取样在 battle.js 的 Match.offerDraft 里做，这里不引入任何逻辑。 -->
+<script src="src/cards/pick-pools.js"></script>
+<script src="src/cards.js"></script>
+<script src="src/systems/damage.js"></script>
+<script src="src/rules.js"></script>
+<script src="src/rules/effects/spawn.js"></script>
+<script src="src/rules/effects/sigil.js"></script>
+<script src="src/rules/effects/spirit.js"></script>
+<script src="src/rules/effects/orbShield.js"></script>
+<script src="src/rules/effects/push.js"></script>
+<script src="src/rules/effects/pull.js"></script>
+<script src="src/rules/effects/blink.js"></script>
+<script src="src/rules/effects/flight.js"></script>
+<script src="src/rules/effects/dash.js"></script>
+<script src="src/rules/effects/heal.js"></script>
+<script src="src/rules/effects/shield.js"></script>
+<script src="src/rules/effects/gainMana.js"></script>
+<script src="src/rules/effects/manaCapDown.js"></script>
+<script src="src/rules/effects/draw.js"></script>
+<script src="src/rules/effects/loseHp.js"></script>
+<script src="src/rules/effects/harvest.js"></script>
+<script src="src/rules/effects/swap.js"></script>
+<script src="src/rules/effects/speed.js"></script>
+<script src="src/rules/effects/regen.js"></script>
+<script src="src/rules/effects/buffNext.js"></script>
+<script src="src/rules/effects/totem.js"></script>
+<script src="src/rules/effects/damage.js"></script>
+<script src="src/rules/effects/status.js"></script>
+<script src="src/rules/effects/quake.js"></script>
+<script src="src/rules/effects/ignite.js"></script>
+<script src="src/rules/effects/destroySigil.js"></script>
+<script src="src/rules/effects/hail.js"></script>
+<script src="src/battle.js"></script>
+<script src="src/camera.js"></script>
+<script src="src/net.js"></script>
+<!-- 联机三层（docs/NET.md §9）：输入源抽象 net.js → 传输 net-ws.js → 权威同步纯逻辑 net-match.js。
+     顺序写死：net-match 在打包/覆盖时读 G.NetWs.serializeFor 与 G.Net.RemoteInputSource，
+     装配（谁建连接、谁 step）只在 src/main.js 的 startNet / frame 分支里。 -->
+<script src="src/net-ws.js"></script>
+<!-- 浏览器内置联机（WebRTC + 手动邀请码；房主/加入者同一个页面） -->
+<script src="src/net-rtc.js"></script>
+<script src="src/net-match.js"></script>
+<!-- 战前选牌的牌库校验（docs/NET.md §10；任务书 N5）：纯数据 + 纯函数，零 DOM 零文案。
+     排在 net-match 之后、audio 之前——它只读 G.CARDS_BY_ID 与（页面里）G.UI.LOADOUT_RULES，
+     装配层（src/main.js 的 net 段）在收到对席的 loadout 帧时调它校验，房主是收货方。 -->
+<script src="src/net-loadout.js"></script>
+<script src="src/audio-engine.js"></script>
+<script src="src/sfx-table.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/save.js"></script>
+<!-- 玩家设置（画质/视角/键位）的唯一真源：纯数据 + localStorage，零 DOM；界面在 src/ui/panels.js，中文在 src/hud.js。 -->
+<script src="src/settings.js"></script>
+<script src="src/ui/dom.js"></script>
+<script src="src/ui/core.js"></script>
+<script src="src/ui/items.js"></script>
+<script src="src/ui/bags/profiles.js"></script>
+<script src="src/ui/bags/sources.js"></script>
+<script src="src/ui/selectors.js"></script>
+<script src="src/ui/channel.js"></script>
+<script src="src/ui/card-icons.js"></script>
+<script src="src/ui/art.js"></script>
+<script src="src/ui/widgets.js"></script>
+<script src="src/ui/viewmodel.js"></script>
+<script src="src/ui/fake-cursor.js"></script>
+<script src="src/ui/drag.js"></script>
+<script src="src/ui/panels.js"></script>
+<script src="src/hud.js"></script>
+<script src="src/creative.js"></script>
+<script src="src/vfx.js"></script>
+<script src="src/vfx-recipes.js"></script>
+<script src="src/vfx-render.js"></script>
+<script src="src/hero-sprites.js"></script>
+<script src="src/hero-rig.js"></script>
+<!-- 大气层三层（配方 src/atmos-data.js / 天气权威 src/weather.js / 渲染在装配层）：分工与音效、特效同构，判据见 tools/atmos_check.cjs -->
+<script src="src/atmos-data.js"></script>
+<script src="src/weather.js"></script>
+<script src="src/atmos.js"></script>
+<script src="src/shader.js"></script>
+<!-- 光影包「后处理子集」兼容层（src/shaderpack.js）：默认不激活；设置页可导入 .zip，失败自动回落本层管线。 -->
+<script src="src/shaderpack.js"></script>
+<script src="src/app/app-state.js"></script>
+<script src="src/app/map-presets.js"></script>
+<!-- 规则预设（docs/LEVELS.md §1.2 的唯一真源，纯数据）：buildMatch 与 level_check 都读它。 -->
+<script src="src/app/rule-presets.js"></script>
+<!-- 玩法数据（docs/MODES.md §2）：纯数据 + gameModeFor，它读上面的规则预设，所以排在 rule-presets 之后；
+     编排类（docs/MODES.md §3）只读玩法表与 match，零 DOM / 零 THREE / 零文案，加一个新玩法不改 battle 也不改它。 -->
+<script src="src/app/game-modes.js"></script>
+<script src="src/app/match-director.js"></script>
+<script src="src/app/session.js"></script>
+<script src="src/app/particles.js"></script>
+<script src="src/app/sigil-view.js"></script>
+<script src="src/app/water-material.js"></script>
+<script src="src/app/chunk-mesher.js"></script>
+<script src="src/app/world-view.js"></script>
+<script src="src/app/entity-view.js"></script>
+<script src="src/app/hero-view.js"></script>
+<script src="src/app/fp-view.js"></script>
+<script src="src/app/projectile-view.js"></script>
+<script src="src/app/scenes.js"></script>
+<!-- 页面路由（docs/ROUTER.md §1）：页面级导航的唯一真源（谁在前台 / hash / 前进后退的栈），Scene 只答暂停与指针。
+     顺序写死：它认 Scene，所以排在 scenes.js 之后；main.js 订阅它再落位，所以排在 main.js 之前。 -->
+<script src="src/app/router.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
